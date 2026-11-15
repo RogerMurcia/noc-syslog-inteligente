@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Iniciar sesión · NOC Syslog Inteligente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23060d1a' stroke='%2338e1ff' stroke-width='2'/%3E%3Cpath d='M16 16 L27 9' stroke='%2338e1ff' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2338e1ff'/%3E%3C/svg%3E">
+</head>
+<body class="login-body">
+<main class="login-wrap">
+  <section class="login-card" aria-labelledby="loginTitle">
+    <div class="brand login-brand">
+      <span class="radar" aria-hidden="true"><i></i></span>
+      <span class="brand-text"><b>NOC Syslog</b><small>Inteligente · v{{ version }}</small></span>
+    </div>
+    <h1 id="loginTitle">Ingreso al centro de operaciones</h1>
+    <p class="muted">Use su usuario del NOC. Cada acción queda registrada a su nombre en la auditoría.</p>
+    <form id="loginForm" class="stack" autocomplete="on" novalidate>
+      <label>Usuario<input name="username" id="lgUser" autocomplete="username" maxlength="32" required autofocus spellcheck="false"></label>
+      <label>Contraseña
+        <span class="pw-field"><input name="password" id="lgPass" type="password" autocomplete="current-password" maxlength="128" required>
+        <button type="button" class="btn ghost" id="lgShow" aria-label="Mostrar contraseña">Ver</button></span>
+      </label>
+      <p class="login-err" id="lgErr" role="alert" hidden></p>
+      <button class="btn primary login-btn" type="submit" id="lgBtn">Ingresar</button>
+    </form>
+    <form id="mfaForm" class="stack" autocomplete="off" hidden novalidate>
+      <div class="mfa-step">
+        <span class="mfa-badge" aria-hidden="true">2</span>
+        <div><b>Verificación en dos pasos</b><br><span class="muted">Escriba el código de 6 dígitos que muestra su app de autenticación (Google Authenticator, Microsoft Authenticator, Authy…).</span></div>
+      </div>
+      <label>Código de verificación<input name="code" id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" spellcheck="false"></label>
+      <p class="login-err" id="mfaErr" role="alert" hidden></p>
+      <button class="btn primary login-btn" type="submit" id="mfaBtn">Verificar</button>
+      <p class="mfa-links"><button type="button" class="linkbtn" id="mfaRecovery">Usar un código de recuperación</button> · <button type="button" class="linkbtn" id="mfaBack">Volver</button></p>
+    </form>
+    <dl class="login-roles">
+      <div><dt>Administrador</dt><dd>Gestiona usuarios, inventario y el modo administrador de la consola real.</dd></div>
+      <div><dt>Operador</dt><dd>Atiende eventos e incidentes, propone y aprueba acciones de otros.</dd></div>
+      <div><dt>Monitoreo</dt><dd>Consulta paneles, eventos, incidentes y auditoría sin cambiar nada.</dd></div>
+    </dl>
+  </section>
+  <p class="login-foot">Roger Fabian Murcia Fino · Administración y Gestión de Redes · UCompensar<br>
+    Doble factor TOTP (RFC 6238) · 5 intentos fallidos bloquean la cuenta 5 minutos.</p>
+</main>
+<script>
+(function () {
+  const f = document.getElementById("loginForm"), err = document.getElementById("lgErr"),
+        btn = document.getElementById("lgBtn"), pass = document.getElementById("lgPass");
+  document.getElementById("lgShow").addEventListener("click", e => {
+    const show = pass.type === "password";
+    pass.type = show ? "text" : "password";
+    e.target.textContent = show ? "Ocultar" : "Ver";
+  });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    err.hidden = true; btn.disabled = true; btn.textContent = "Verificando…";
+    const next = new URLSearchParams(location.search).get("next") || "/";
+    try {
+      const r = await fetch("/login", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: f.username.value, password: f.password.value, next }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((d.errors || ["No fue posible iniciar sesión"]).join(" · "));
+      if (d.mfa_required) {                          // paso 2: segundo factor
+        f.hidden = true; mfa.hidden = false; code.value = ""; code.focus();
+        return;
+      }
+      location.href = d.next || "/";
+    } catch (ex) {
+      err.textContent = ex.message; err.hidden = false;
+      pass.value = ""; pass.focus();
+      btn.disabled = false; btn.textContent = "Ingresar";
+    }
+  });
+  const mfa = document.getElementById("mfaForm"), code = document.getElementById("mfaCode"),
+        merr = document.getElementById("mfaErr"), mbtn = document.getElementById("mfaBtn");
+  document.getElementById("mfaRecovery").addEventListener("click", () => {
+    const rec = code.inputMode === "numeric";
+    code.inputMode = rec ? "text" : "numeric"; code.maxLength = rec ? 9 : 6;
+    code.placeholder = rec ? "xxxx-xxxx" : "000000"; code.removeAttribute("pattern");
+    code.previousSibling.textContent = rec ? "Código de recuperación" : "Código de verificación";
+    document.getElementById("mfaRecovery").textContent = rec ? "Usar el código de la app" : "Usar un código de recuperación";
+    code.value = ""; code.focus();
+  });
+  document.getElementById("mfaBack").addEventListener("click", () => location.reload());
+  mfa.addEventListener("submit", async e => {
+    e.preventDefault();
+    merr.hidden = true; mbtn.disabled = true; mbtn.textContent = "Verificando…";
+    try {
+      const r = await fetch("/login/mfa", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.value.trim() }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (r.status === 423 || /venció|vuelva|escriba de nuevo/i.test((d.errors || []).join(" "))) {
+          mfa.hidden = true; f.hidden = false; pass.value = "";
+          err.textContent = (d.errors || []).join(" · "); err.hidden = false; btn.disabled = false; btn.textContent = "Ingresar";
+          return;
+        }
+        throw new Error((d.errors || ["Código incorrecto"]).join(" · "));
+      }
+      location.href = d.next || "/";
+    } catch (ex) {
+      merr.textContent = ex.message; merr.hidden = false; code.value = ""; code.focus();
+    } finally { mbtn.disabled = false; mbtn.textContent = "Verificar"; }
+  });
+})();
+</script>
+</body>
+</html>
