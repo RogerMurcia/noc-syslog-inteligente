@@ -1,239 +1,548 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NOC Syslog Inteligente v{{ version }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NOC Syslog Inteligente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23060d1a' stroke='%2338e1ff' stroke-width='2'/%3E%3Cpath d='M16 16 L27 9' stroke='%2338e1ff' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2338e1ff'/%3E%3C/svg%3E">
 </head>
-<body>
-<header class="topbar">
-  <div class="brand"><span class="dot"></span><strong>NOC Syslog Inteligente</strong><span class="version">v{{ version }} · MVP</span></div>
-  <label class="op">Operador&nbsp;<input id="operador" value="{{ operator }}" maxlength="32" title="Responsable que queda en la auditoría"></label>
-</header>
-<nav class="tabs" id="tabs">
-  <button data-view="dashboard" class="active">Dashboard</button>
-  <button data-view="inventario">Inventario</button>
-  <button data-view="eventos">Eventos</button>
-  <button data-view="incidentes">Incidentes</button>
-  <button data-view="configuraciones">Configuraciones</button>
-  <button data-view="consola">Consola</button>
-  <button data-view="politica">Política IA</button>
-  <button data-view="auditoria">Auditoría</button>
-</nav>
-<!-- Exigencia de la guía: los datos simulados deben estar claramente identificados -->
-<div class="sim-banner">Entorno de pruebas · los equipos y eventos marcados <b>SIM</b> son DATOS SIMULADOS</div>
+<body data-start="{{ start_view }}" data-version="{{ version }}" data-auth="{{ 1 if auth else 0 }}" data-role="{{ user.role if user else '' }}">
+<meta name="csrf-token" content="{{ csrf }}">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-dash" viewBox="0 0 24 24"><path d="M3 13h8V3H3zm10 8h8V11h-8zM3 21h8v-6H3zm10-18v6h8V3z"/></symbol>
+    <symbol id="i-events" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-inc" viewBox="0 0 24 24"><path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2zm0-4h-2V9h2z"/></symbol>
+    <symbol id="i-inv" viewBox="0 0 24 24"><path d="M4 4h16v6H4zm0 10h16v6H4zm3-7h2v0M7 17h2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="7" r="1.2"/><circle cx="8" cy="17" r="1.2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.6 8 11 4.6-1.4 8-6 8-11V5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8.5 12 2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M6.3 6.3l2.1 2.1m7.2 7.2 2.1 2.1m0-11.4-2.1 2.1m-7.2 7.2-2.1 2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-cfg" viewBox="0 0 24 24"><path d="M8 6 2 12l6 6M16 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-term" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m6 9 3 3-3 3m5 0h6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-tg" viewBox="0 0 24 24"><path d="M21.5 3.5 2.8 10.7c-1 .4-1 1.8.1 2.1l4.6 1.5 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.6 3.4c.6.4 1.4.1 1.6-.6L23 4.8c.2-.9-.7-1.6-1.5-1.3zM9.6 14.2l8.6-7.7-6.7 9.3"/></symbol>
+    <symbol id="i-audit" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6m0-10v.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-obs" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="19" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.2 7.4 10.6 15.9M16.8 7.4 13.4 15.9M7.5 6h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M15.5 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c2 .8 3.2 2.5 3.5 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
 
-<main>
-<!-- ============================ DASHBOARD ============================ -->
-<section class="view active" id="view-dashboard">
-  <div class="head"><h1>Dashboard</h1><button class="btn" id="dash-refresh">Actualizar</button></div>
-  <div class="kpis">
-    <div class="kpi ok"><b id="k-devices">-</b><span>Equipos en inventario</span></div>
-    <div class="kpi"><b id="k-events">-</b><span>Eventos últimas 24 h</span></div>
-    <div class="kpi crit"><b id="k-critical">-</b><span>Críticos 24 h (sev 0-3)</span></div>
-    <div class="kpi warn"><b id="k-incidents">-</b><span>Incidentes abiertos</span></div>
-  </div>
-  <div class="grid2">
-    <div class="card"><h2>Estado de los dispositivos</h2><div class="table-wrap"><table>
-      <thead><tr><th>Equipo</th><th>IP</th><th>Marca</th><th>Estado</th><th>Eventos 24 h</th><th>Último evento</th></tr></thead>
-      <tbody id="dash-devices"></tbody></table></div></div>
-    <div class="card"><h2>Eventos por severidad (24 h)</h2><div class="bars" id="dash-sev"></div></div>
-    <div class="card"><h2>Eventos críticos recientes (sev 0-3)</h2><div class="table-wrap"><table>
-      <thead><tr><th>Fecha</th><th>Sev</th><th>Equipo</th><th>Mensaje</th></tr></thead>
-      <tbody id="dash-critical"></tbody></table></div></div>
-    <div class="card"><h2>Incidentes abiertos</h2><div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Sev</th><th>Título</th><th>Estado</th><th>Responsable</th></tr></thead>
-      <tbody id="dash-incidents"></tbody></table></div></div>
-  </div>
-  <div class="card"><h2>Eventos recientes</h2><div class="table-wrap"><table>
-    <thead><tr><th>Fecha</th><th>Sev</th><th>Equipo</th><th>Marca</th><th>Mensaje</th><th>Marcas</th></tr></thead>
-    <tbody id="dash-recent"></tbody></table></div></div>
-</section>
+<div class="shell">
+  <aside class="rail" id="rail">
+    <a class="brand" href="#dashboard">
+      <span class="radar" aria-hidden="true"><i></i></span>
+      <span class="brand-text"><b>NOC Syslog</b><small>Inteligente · v{{ version }}</small></span>
+    </a>
+    <nav class="nav" aria-label="Secciones">
+      <p class="nav-group">Operación</p>
+      <a href="#dashboard" data-view="dashboard"><svg><use href="#i-dash"/></svg>Panel</a>
+      <a href="#eventos" data-view="eventos"><svg><use href="#i-events"/></svg>Eventos</a>
+      <a href="#incidentes" data-view="incidentes"><svg><use href="#i-inc"/></svg>Incidentes<span class="count" id="navInc"></span></a>
+      <a href="#inventario" data-view="inventario"><svg><use href="#i-inv"/></svg>Inventario</a>
+      <a href="#observabilidad" data-view="observabilidad"><svg><use href="#i-obs"/></svg>Observabilidad<span class="count warn" id="navObs"></span></a>
+      <p class="nav-group">Inteligencia</p>
+      <a href="#politicas" data-view="politicas"><svg><use href="#i-shield"/></svg>Políticas IA<span class="count warn" id="navPol"></span></a>
+      <a href="#asistente" data-view="asistente"><svg><use href="#i-ai"/></svg>Asistente</a>
+      <a href="#telegram" data-view="telegram"><svg><use href="#i-tg"/></svg>Telegram</a>
+      <p class="nav-group">Equipos</p>
+      <a href="#configuraciones" data-view="configuraciones"><svg><use href="#i-cfg"/></svg>Configuraciones</a>
+      <a href="#consola" data-view="consola"><svg><use href="#i-term"/></svg>Consola</a>
+      <p class="nav-group">Sistema</p>
+      <a href="#auditoria" data-view="auditoria"><svg><use href="#i-audit"/></svg>Auditoría</a>
+      <a href="#usuarios" data-view="usuarios" class="admin-only"><svg><use href="#i-users"/></svg>Usuarios</a>
+      <a href="#proyecto" data-view="proyecto"><svg><use href="#i-info"/></svg>Proyecto</a>
+    </nav>
+    <div class="rail-foot">
+      <span>Roger Fabian Murcia Fino</span>
+      <span>Administración y Gestión de Redes · UCompensar</span>
+    </div>
+  </aside>
 
-<!-- ============================ INVENTARIO ============================ -->
-<section class="view" id="view-inventario">
-  <div class="head"><div><h1>Inventario de dispositivos</h1>
-    <p class="muted">"Autorizado" = lista permitida de fuentes Syslog: los eventos de equipos no autorizados se guardan marcados y nunca crean incidentes.</p></div>
-    <button class="btn primary" id="dev-new">+ Nuevo equipo</button></div>
-  <div class="card table-wrap"><table>
-    <thead><tr><th>Nombre</th><th>IP</th><th>Marca</th><th>Modelo</th><th>Versión</th><th>Ubicación</th><th>Estado</th><th>Autorizado</th><th>Actualizado</th><th></th></tr></thead>
-    <tbody id="dev-table"></tbody></table></div>
-</section>
-
-<!-- ============================ EVENTOS ============================ -->
-<section class="view" id="view-eventos">
-  <div class="head"><h1>Eventos Syslog</h1></div>
-  <div class="card">
-    <h2>Importar mensajes Syslog</h2>
-    <form id="frm-import">
-      <div class="row">
-        <label>Equipo de origen<select name="device_id" class="sel-device" required></select></label>
-        <label>Archivo .log / .txt<input type="file" name="file" accept=".log,.txt"></label>
-        <button class="btn primary">Importar</button>
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Abrir menú"><svg><use href="#i-menu"/></svg></button>
+      <div class="title-wrap">
+        <h1 id="viewTitle">Panel</h1>
+        <p id="viewSub">Estado de la red en tiempo real</p>
       </div>
-      <label>…o pegue mensajes (uno por línea)<textarea name="text" rows="3" placeholder="<187>Oct 14 10:00:00 RTR01 %LINK-3-UPDOWN: Interface Gi0/1, changed state to down"></textarea></label>
-    </form>
-    <p class="muted small">Para recepción en vivo por UDP use <code>python receptor.py</code> y <code>python simulador.py</code>. Archivo de prueba: <code>muestras/eventos_simulados.log</code>.</p>
-  </div>
-  <div class="card">
-    <form id="frm-filter" class="row">
-      <label>Desde<input type="date" name="desde"></label>
-      <label>Hasta<input type="date" name="hasta"></label>
-      <label>Marca<select name="vendor"><option value="">Todas</option><option>Cisco</option><option>Fortinet</option><option>Huawei</option><option>Desconocido</option></select></label>
-      <label>Equipo<select name="device_id" class="sel-device"><option value="">Todos</option></select></label>
-      <label>Severidad<select name="severity" class="sel-sev"><option value="">Todas</option></select></label>
-      <button class="btn primary">Filtrar</button><button class="btn" type="reset">Limpiar</button>
-    </form>
-    <div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Recibido</th><th>Equipo / IP</th><th>Marca</th><th>Facility</th><th>Severidad</th><th>Código</th><th>Mensaje</th><th>Marcas</th></tr></thead>
-      <tbody id="ev-table"></tbody></table></div>
-    <p class="muted small" id="ev-count"></p>
-  </div>
-</section>
-
-<!-- ============================ INCIDENTES ============================ -->
-<section class="view" id="view-incidentes">
-  <div class="head"><div><h1>Incidentes</h1>
-    <p class="muted">Se crean solos con eventos de severidad 0-3 de fuentes autorizadas, o manualmente. Ciclo: abierto → asignado → en progreso → cerrado.</p></div>
-    <div class="row" style="margin:0"><select id="inc-filter"><option value="abiertos">Abiertos</option><option value="cerrado">Cerrados</option><option value="todos">Todos</option></select>
-    <button class="btn primary" id="inc-new">+ Nuevo incidente</button></div></div>
-  <div class="card table-wrap"><table>
-    <thead><tr><th>#</th><th>Sev</th><th>Título</th><th>Equipo</th><th>Estado</th><th>Responsable</th><th>Eventos</th><th>Creado</th></tr></thead>
-    <tbody id="inc-table"></tbody></table></div>
-</section>
-
-<!-- ============================ CONFIGURACIONES ============================ -->
-<section class="view" id="view-configuraciones">
-  <div class="head"><div><h1>Configuraciones Syslog</h1>
-    <p class="muted">Plantillas comentadas de laboratorio. Revise la sintaxis según la versión del equipo y aplíquelas solo en equipos autorizados.</p></div></div>
-  <div class="card">
-    <form id="frm-config" class="row">
-      <label>Marca<select name="vendor"><option>Cisco</option><option>Fortinet</option><option>Huawei</option></select></label>
-      <label>Equipo (opcional)<select name="device_id" class="sel-device"><option value="">—</option></select></label>
-      <label>Servidor Syslog<input name="server_ip" value="192.0.2.250"></label>
-      <label>Puerto<input name="port" value="5514" size="6"></label>
-      <label>Severidad mínima<select name="severity" class="sel-sev"></select></label>
-      <label>Servidor NTP<input name="ntp" value="192.0.2.123"></label>
-      <label>Interfaz de origen<input name="source" value="GigabitEthernet0/0/0"></label>
-      <button class="btn primary">Generar</button><button class="btn" type="button" id="cfg-copy">Copiar</button>
-    </form>
-    <pre class="pre" id="cfg-out">Elija la marca y presione Generar.</pre>
-  </div>
-</section>
-
-<!-- ============================ CONSOLA ============================ -->
-<section class="view" id="view-consola">
-  <div class="head"><div><h1>Consola de solo lectura (SIMULADA)</h1>
-    <p class="muted">No se conecta a ningún equipo. Solo se ejecutan comandos de la lista permitida; lo demás se bloquea y queda en la auditoría.</p></div></div>
-  <div class="grid2">
-    <div class="card">
-      <div class="row">
-        <label>Equipo<select id="con-device" class="sel-device"></select></label>
-        <label>Origen de la orden<select id="con-actor"><option value="operador">Operador humano</option><option value="asistente_ia">Asistente de IA</option></select></label>
+      <div class="top-tools">
+        <div class="pulse-chip" id="feedChip" title="Último mensaje Syslog recibido"><i></i><span>Sin datos</span></div>
+        <div class="pulse-chip" id="tgChip" title="Alertas a Telegram"><svg><use href="#i-tg"/></svg><span>Telegram</span></div>
+        <div class="clock"><b id="clock">--:--:--</b><small>Bogotá · UTC−5</small></div>
+        {% if user %}
+        <div class="user-chip" id="userChip">
+          <span class="avatar" aria-hidden="true">{{ user.username[:1]|upper }}</span>
+          <span class="who"><b id="userName">{{ user.full_name }}</b><small><span class="role role-{{ user.role }}">{{ user.role_name }}</span> · {{ user.username }}</small></span>
+          <button class="btn sm ghost" id="pwBtn" type="button">Mi cuenta</button>
+          <button class="btn sm" id="logoutBtn" type="button">Salir</button>
+          <input id="operador" type="hidden" value="{{ user.username }}">
+        </div>
+        {% else %}
+        <label class="operator">
+          <span>Operador</span>
+          <input id="operador" value="{{ operator }}" maxlength="32" autocomplete="off" spellcheck="false">
+        </label>
+        {% endif %}
       </div>
-      <div class="terminal" id="terminal"></div>
-      <form id="frm-cmd" class="terminal-input"><input id="cmd" autocomplete="off" maxlength="120" placeholder="comando + Enter"><button class="btn primary">Ejecutar</button></form>
-    </div>
-    <div class="card">
-      <h2>Comandos permitidos</h2><ul class="cmd-list" id="allow-list"></ul>
-      <h3>Pruebe también (se bloquean)</h3>
-      <ul class="cmd-list blocked"><li><code>configure terminal</code></li><li><code>reload</code></li><li><code>show running-config</code></li><li><code>show clock ; reload</code></li><li><code>ping 8.8.8.8</code></li></ul>
-    </div>
+    </header>
+
+    <main id="views">
+      <!-- ===================================================== PANEL -->
+      <section class="view" id="v-dashboard">
+        <div class="gate panel" id="gate"></div>
+        <div class="grid g-dash">
+          <article class="panel span-8">
+            <header class="ph"><h2>Tráfico Syslog · últimas 24 horas</h2><div class="legend"><span class="lg all">Todos</span><span class="lg crit">Severidad 0–3</span></div></header>
+            <div id="timeline" class="chart"></div>
+          </article>
+          <article class="panel span-4">
+            <header class="ph"><h2>Por severidad</h2><span class="muted" id="sevTotal"></span></header>
+            <div id="sevRing" class="ring-wrap"></div>
+          </article>
+          <article class="panel span-12">
+            <header class="ph"><h2>Equipos</h2><div class="legend" id="devLegend"></div></header>
+            <div id="devGrid" class="dev-grid"></div>
+          </article>
+          <article class="panel span-7">
+            <header class="ph"><h2>Flujo de eventos</h2><a class="link" href="#eventos">Ver todos</a></header>
+            <div id="stream" class="stream"></div>
+          </article>
+          <article class="panel span-5">
+            <header class="ph"><h2>Incidentes abiertos</h2><a class="link" href="#incidentes">Gestionar</a></header>
+            <div id="dashInc" class="inc-list"></div>
+          </article>
+          <article class="panel span-12">
+            <header class="ph"><h2>Lo que el asistente recomienda atender primero</h2><a class="link" href="#asistente">Ver todas</a></header>
+            <div id="dashImp" class="imp-row"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== EVENTOS -->
+      <section class="view" id="v-eventos">
+        <div class="grid">
+          <article class="panel span-12">
+            <form class="filters" id="evFilters">
+              <label>Desde<input type="date" name="desde"></label>
+              <label>Hasta<input type="date" name="hasta"></label>
+              <label>Fabricante<select name="vendor"><option value="">Todos</option><option>Cisco</option><option>Fortinet</option><option>Huawei</option><option>Desconocido</option></select></label>
+              <label>Equipo<select name="device_id" class="dev-select"><option value="">Todos</option></select></label>
+              <label>Severidad<select name="severity"><option value="">Todas</option></select></label>
+              <label>Decisión<select name="decision"><option value="">Todas</option><option>ALLOW</option><option>REVIEW</option><option>BLOCK</option></select></label>
+              <div class="filter-actions"><button class="btn primary" type="submit">Filtrar</button><button class="btn ghost" type="reset">Limpiar</button></div>
+            </form>
+            <div class="table-wrap tall"><table class="data">
+              <thead><tr><th>#</th><th>Recibido</th><th>Equipo</th><th>Fabricante</th><th>Sev</th><th>Decisión</th><th>Mensaje</th><th>Marcas</th></tr></thead>
+              <tbody id="evRows"></tbody>
+            </table></div>
+            <p class="foot-note" id="evCount"></p>
+          </article>
+          <article class="panel span-12 op-only">
+            <header class="ph"><h2>Importar registros</h2><span class="muted">Archivo .log/.txt de hasta 2 MB o texto pegado; una línea por mensaje</span></header>
+            <form id="importForm" class="import-form">
+              <label>Equipo de origen<select name="device_id" class="dev-select" required><option value="">Seleccione…</option></select></label>
+              <label class="file-drop"><input type="file" name="file" accept=".log,.txt"><span id="fileName">Elegir archivo</span></label>
+              <textarea name="text" rows="3" placeholder="&lt;187&gt;Oct  5 18:00:00 RTR01 %LINK-3-UPDOWN: Interface Gi0/1, changed state to down"></textarea>
+              <button class="btn primary" type="submit">Importar y evaluar</button>
+            </form>
+            <div id="importResult"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== INCIDENTES -->
+      <section class="view" id="v-incidentes">
+        <div class="toolbar">
+          <div class="seg" id="incSeg"><button data-v="abiertos" class="on">Abiertos</button><button data-v="cerrado">Cerrados</button><button data-v="todos">Todos</button></div>
+          <button class="btn primary op-only" id="incNew">Nuevo incidente</button>
+        </div>
+        <div class="kanban" id="incBoard"></div>
+      </section>
+
+      <!-- ===================================================== INVENTARIO -->
+      <section class="view" id="v-inventario">
+        <div class="toolbar">
+          <div class="seg" id="invSeg"><button data-v="" class="on">Todos</button><button data-v="Cisco">Cisco</button><button data-v="Fortinet">Fortinet</button><button data-v="Huawei">Huawei</button><button data-v="Otro">Otro</button></div>
+          <button class="btn primary admin-only" id="devNew">Registrar equipo</button>
+        </div>
+        <div class="inv-grid" id="invGrid"></div>
+      </section>
+
+      <!-- ===================================================== POLÍTICAS -->
+      <section class="view" id="v-politicas">
+        <div class="toolbar">
+          <div class="seg" id="polSeg">
+            <button data-v="lab" class="on">Laboratorio</button><button data-v="decisiones">Decisiones</button><button data-v="catalogo">Políticas</button><button data-v="evidencia">Evidencia</button>
+          </div>
+        </div>
+        <div class="polpane" id="pol-lab">
+          <div class="grid">
+            <article class="panel span-7">
+              <header class="ph"><h2>Mensaje a evaluar</h2><span class="muted">No se guarda ni se envía a ningún equipo</span></header>
+              <div class="scen" id="scen"></div>
+              <textarea id="labMsg" class="mono-area" rows="4" spellcheck="false"></textarea>
+              <div class="lab-opts">
+                <label>Severidad<select id="labSev"><option value="">La del mensaje</option></select></label>
+                <label>Fallos de acceso previos<input type="number" id="labFails" min="0" max="999" value="0"></label>
+                <label class="switch"><input type="checkbox" id="labAuth" checked><i></i>Fuente autorizada</label>
+                <button class="btn primary" id="labRun">Evaluar</button>
+              </div>
+              <p class="hint">Antes de evaluar, predigan si el resultado será permitir, revisar o bloquear, y con qué política.</p>
+            </article>
+            <article class="panel span-5">
+              <header class="ph"><h2>Políticas activas</h2><span class="muted">Desactive una para ver qué riesgo reaparece</span></header>
+              <div id="labPolicies" class="toggles"></div>
+            </article>
+            <article class="panel span-12" id="labOut"><div class="empty">Elija un escenario o escriba un mensaje Syslog y pulse <b>Evaluar</b>.</div></article>
+          </div>
+        </div>
+        <div class="polpane" id="pol-decisiones" hidden>
+          <article class="panel">
+            <div class="filters slim">
+              <div class="seg" id="decSeg"><button data-v="" class="on">Todas</button><button data-v="pend">Por revisar</button><button data-v="ALLOW">Permitidas</button><button data-v="REVIEW">En revisión</button><button data-v="BLOCK">Bloqueadas</button></div>
+            </div>
+            <div class="table-wrap tall"><table class="data">
+              <thead><tr><th>Evento</th><th>Hora</th><th>Equipo</th><th>Sev</th><th>Decisión</th><th>Políticas</th><th>Mensaje</th><th>Revisión</th></tr></thead>
+              <tbody id="decRows"></tbody>
+            </table></div>
+          </article>
+        </div>
+        <div class="polpane" id="pol-catalogo" hidden>
+          <div class="arch panel">
+            <div class="arch-flow" id="archFlow"></div>
+          </div>
+          <div class="policy-grid" id="policyGrid"></div>
+        </div>
+        <div class="polpane" id="pol-evidencia" hidden>
+          <article class="panel">
+            <header class="ph"><h2>Definición de terminado</h2><button class="btn" id="dodRun">Ejecutar de nuevo</button></header>
+            <p class="lead">El trabajo está terminado cuando la evidencia es repetible: el mismo evento con las mismas políticas produce la misma decisión.</p>
+            <div id="dod" class="dod"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== ASISTENTE -->
+      <section class="view" id="v-asistente">
+        <div class="grid">
+          <article class="panel span-8">
+            <header class="ph"><h2>Mejoras recomendadas para la red</h2><span class="muted">Calculadas con el estado actual del NOC</span></header>
+            <div id="impList" class="imp-list"></div>
+          </article>
+          <article class="panel span-4 assistant-card">
+            <header class="ph"><h2>Analizar un evento</h2></header>
+            <p class="lead">El asistente explica qué pasó, estima el riesgo y propone soluciones. Solo lee: no ejecuta comandos ni aprueba acciones.</p>
+            <form id="askForm" class="ask"><input id="askId" type="number" min="1" placeholder="Número de evento" required><button class="btn primary">Analizar</button></form>
+            <div class="rules">
+              <div><b>Permitido</b>Explicar, estimar riesgo, sugerir verificaciones de solo lectura</div>
+              <div><b>Prohibido</b>Usar credenciales, abrir SSH, ejecutar o aprobar cambios</div>
+              <div><b>Si se cae</b>Las reglas siguen decidiendo; los eventos se siguen guardando</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== CONFIGURACIONES -->
+      <section class="view" id="v-configuraciones">
+        <div class="grid">
+          <article class="panel span-4">
+            <header class="ph"><h2>Parámetros</h2></header>
+            <form id="cfgForm" class="stack">
+              <div class="vendor-pick" id="vendorPick">
+                <label><input type="radio" name="vendor" value="Cisco" checked><span>Cisco<small>IOS / IOS-XE</small></span></label>
+                <label><input type="radio" name="vendor" value="Fortinet"><span>Fortinet<small>FortiOS</small></span></label>
+                <label><input type="radio" name="vendor" value="Huawei"><span>Huawei<small>VRP</small></span></label>
+              </div>
+              <label>Equipo destino<select name="device_id" class="dev-select"><option value="">Sin especificar</option></select></label>
+              <label>Servidor Syslog (IP del NOC)<input name="server_ip" value="192.0.2.250" required></label>
+              <div class="two"><label>Puerto UDP<input name="port" type="number" value="5514" min="1" max="65535"></label>
+                <label>Severidad mínima<select name="severity"></select></label></div>
+              <label>Servidor NTP<input name="ntp" value="192.0.2.123" required></label>
+              <label>Interfaz de origen<input name="source" value="GigabitEthernet0/0/0" required></label>
+              <button class="btn primary">Generar configuración</button>
+            </form>
+          </article>
+          <article class="panel span-8">
+            <header class="ph"><h2 id="cfgTitle">Configuración</h2><button class="btn" id="cfgCopy" disabled>Copiar</button></header>
+            <pre class="code-view" id="cfgOut"><span class="muted">Elija el fabricante y los parámetros, y pulse Generar configuración.</span></pre>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== CONSOLA -->
+      <section class="view" id="v-consola">
+        <div class="toolbar">
+          <div class="seg" id="conSeg"><button data-v="sim" class="on">Simulada</button><button data-v="real" class="op-only">Equipo real</button></div>
+          <span class="muted" id="conSegHint">Práctica segura: no se conecta a ningún equipo</span>
+        </div>
+
+        <div id="con-sim" class="grid">
+          <article class="panel span-8 term-panel">
+            <div class="term-bar">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <select id="conDev" class="dev-select-strict" aria-label="Equipo"></select>
+              <label class="switch small"><input type="checkbox" id="conAI"><i></i>Enviar como asistente IA</label>
+            </div>
+            <div class="terminal" id="term" tabindex="0">
+              <div class="t-line t-sys">Consola SIMULADA de solo lectura. No hay conexión con ningún equipo.</div>
+            </div>
+            <form class="term-input" id="conForm"><span class="prompt" id="conPrompt">&gt;</span><input id="conCmd" autocomplete="off" spellcheck="false" placeholder="Escriba un comando o elija uno de la lista"></form>
+          </article>
+          <article class="panel span-4">
+            <header class="ph"><h2>Comandos permitidos</h2></header>
+            <div id="conAllowed" class="cmd-list"></div>
+            <h3 class="sub">Lo que se bloquea</h3>
+            <ul class="plain">
+              <li>Modo configuración, reinicios y borrados</li>
+              <li>Encadenar o redirigir con <code>; | &amp; ` $ &gt; &lt;</code></li>
+              <li>Mostrar la configuración completa con secretos</li>
+              <li>Cualquier comando que envíe el asistente de IA</li>
+            </ul>
+          </article>
+        </div>
+
+        <div id="con-real" class="grid" hidden>
+          <div class="span-4 col-stack">
+            <article class="panel">
+              <header class="ph"><h2>Conexión</h2><span id="rlState" class="dec REVIEW">DESCONECTADO</span></header>
+              <div class="seg full" id="rlKind"><button data-v="serial" class="on">Puerto serial</button><button data-v="tcp">Telnet / GNS3</button></div>
+              <div class="stack" style="margin-top:12px">
+                <div id="rlSerialBox" class="stack">
+                  <label>Puerto COM
+                    <span class="row-input"><select id="rlPort"></select><button type="button" class="btn sm" id="rlRefresh" title="Volver a buscar puertos">Buscar</button></span>
+                  </label>
+                  <p class="hint" id="rlPortHint"></p>
+                  <div class="two">
+                    <label>Velocidad (bps)<select id="rlBaud"></select></label>
+                    <label>Formato<input value="8 · N · 1 · sin flujo" disabled></label>
+                  </div>
+                </div>
+                <div id="rlTcpBox" class="stack" hidden>
+                  <label>Host y puerto de consola<input id="rlTcp" placeholder="127.0.0.1:5000" autocomplete="off"></label>
+                  <p class="hint">En GNS3: clic derecho sobre el nodo, el puerto aparece en «Console». El nodo debe estar encendido.</p>
+                </div>
+                <label>Equipo del inventario<select id="rlDev" class="dev-select"><option value="">Sin asociar</option></select></label>
+                <div class="act-btns"><button class="btn primary" id="rlOpen">Conectar</button><button class="btn" id="rlClose" disabled>Desconectar</button></div>
+              </div>
+            </article>
+
+            <article class="panel">
+              <header class="ph"><h2>Modo de trabajo</h2></header>
+              <div class="seg full" id="rlMode"><button data-v="lectura" class="on">Solo lectura</button><button data-v="administrador">Administrador</button></div>
+              <div id="rlAdminBox" class="admin-box" hidden>
+                <p>En modo administrador los comandos <b>cambian la configuración del equipo real</b>. Cada comando queda en la auditoría (con contraseñas ocultas) y se avisa por Telegram.</p>
+                <label class="switch small"><input type="checkbox" id="rlAck"><i></i>Soy el administrador responsable de este equipo</label>
+                <button class="btn danger" id="rlAdminGo">Activar modo administrador</button>
+              </div>
+              <p class="hint" id="rlModeHint">Solo pasan los comandos de consulta de la lista permitida del fabricante.</p>
+            </article>
+
+            <article class="panel">
+              <header class="ph"><h2>Prueba hacia Telegram</h2></header>
+              <div class="two">
+                <label>Severidad<select id="rlSev"></select></label>
+                <label>Texto<input id="rlText" value="Prueba de alerta desde la consola del NOC" maxlength="120"></label>
+              </div>
+              <div class="act-btns" style="margin-top:12px">
+                <button class="btn" id="rlTestDev" title="El equipo genera el Syslog (Cisco: send log; Fortinet: diagnose log test)">Desde el equipo</button>
+                <button class="btn primary" id="rlTestNoc" title="El NOC registra un evento de prueba con la IP del equipo">Directa al NOC</button>
+              </div>
+              <div id="rlTestOut" class="hint"></div>
+            </article>
+
+            <article class="panel">
+              <header class="ph"><h2>Enviar Syslog al NOC</h2></header>
+              <p class="hint" id="rlSyslogWarn"></p>
+              <form id="rlCfg" class="stack">
+                <div class="two">
+                  <label>IP de este PC<input name="server_ip" id="rlSrv" required></label>
+                  <label>Puerto UDP<input name="port" type="number" value="5514" min="1" max="65535"></label>
+                </div>
+                <div class="two">
+                  <label>Severidad mínima<select name="severity" id="rlCfgSev"></select></label>
+                  <label>Servidor NTP<input name="ntp" value="192.0.2.123" required></label>
+                </div>
+                <label>Interfaz de origen<input name="source" id="rlSrc" value="GigabitEthernet0/0/0" required></label>
+                <button class="btn" id="rlApply">Aplicar en el equipo</button>
+              </form>
+            </article>
+          </div>
+
+          <article class="panel span-8 term-panel real">
+            <div class="term-bar">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <b class="mono" id="rlTitle">Sin conexión</b>
+              <span class="chip" id="rlModeChip">solo lectura</span>
+              <button class="btn sm ghost" id="rlClear" style="margin-left:auto">Limpiar pantalla</button>
+            </div>
+            <pre class="terminal real-term" id="rlTerm" tabindex="0">Conecte el cable de consola (USB-RJ45) o abra un nodo de GNS3 y pulse Conectar.
+Después presione Enter para despertar el equipo.</pre>
+            <div class="keys" id="rlKeys"></div>
+            <form class="term-input" id="rlForm"><span class="prompt">›</span><input id="rlCmd" autocomplete="off" spellcheck="false" placeholder="Comando para el equipo real (Enter para enviar)" disabled></form>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== TELEGRAM -->
+      <section class="view" id="v-telegram">
+        <div class="grid">
+          <article class="panel span-5">
+            <header class="ph"><h2>Conexión</h2><span id="tgBadge"></span></header>
+            <div id="tgStatus" class="kv"></div>
+            <button class="btn primary op-only" id="tgTest">Enviar mensaje de prueba</button>
+            <h3 class="sub">Configurar el bot</h3>
+            <ol class="steps">
+              <li>En Telegram abra <b>@BotFather</b>, envíe <code>/newbot</code> y copie el token.</li>
+              <li>En el archivo <code>.env</code>: <code>TELEGRAM_ENABLED=1</code> y <code>TELEGRAM_BOT_TOKEN=…</code></li>
+              <li>Ejecute <code>python bot_telegram.py</code> y envíe <code>/id</code> a su bot.</li>
+              <li>Ponga ese número en <code>TELEGRAM_CHAT_IDS</code> (varios separados por coma).</li>
+              <li>Reinicie la aplicación, el receptor y el bot, y envíe el mensaje de prueba.</li>
+            </ol>
+          </article>
+          <article class="panel span-7 phone-wrap">
+            <header class="ph"><h2>Vista de la última alerta</h2><span class="muted">Así llega al chat</span></header>
+            <div class="phone"><div class="phone-top"><b>NOC Syslog Bot</b><small>bot</small></div><div class="chat" id="tgPreview"></div></div>
+          </article>
+          <article class="panel span-12">
+            <header class="ph"><h2>Historial de alertas</h2></header>
+            <div class="table-wrap"><table class="data">
+              <thead><tr><th>Hora</th><th>Tipo</th><th>Evento</th><th>Incidente</th><th>Estado</th><th>Detalle</th></tr></thead>
+              <tbody id="tgRows"></tbody>
+            </table></div>
+          </article>
+          <article class="panel span-12">
+            <header class="ph"><h2>Comandos del bot</h2><span class="muted">Solo lectura: el bot nunca aprueba ni ejecuta acciones</span></header>
+            <div class="cmd-cards" id="botCmds"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== AUDITORÍA -->
+      <section class="view" id="v-auditoria">
+        <article class="panel">
+          <div class="filters slim">
+            <input id="audQ" type="search" placeholder="Buscar por responsable, acción o detalle">
+            <div class="seg" id="audSeg"><button data-v="" class="on">Todo</button><button data-v="ok">Correcto</button><button data-v="alerta">Alerta</button><button data-v="bloqueado">Bloqueado</button><button data-v="error">Error</button></div>
+          </div>
+          <div class="table-wrap tall"><table class="data">
+            <thead><tr><th>#</th><th>Fecha</th><th>Responsable</th><th>Acción</th><th>Detalle</th><th>Resultado</th></tr></thead>
+            <tbody id="audRows"></tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <!-- ===================================================== OBSERVABILIDAD -->
+      <section class="view" id="v-observabilidad">
+        <div class="obs-head panel" id="obsHead"></div>
+        <div class="grid">
+          <article class="panel span-12">
+            <header class="ph"><h2>Mapa de dependencias</h2><div class="legend" id="obsLegend"></div></header>
+            <p class="muted obs-hint">Cada flecha va del equipo del que se depende al que depende de él. Si un equipo cae, los que cuelgan de él quedan «afectados» y la causa raíz queda resaltada. Haga clic en un equipo para ver su detalle.</p>
+            <div id="obsMap" class="obs-map" role="img" aria-label="Mapa de dependencias de los equipos"></div>
+          </article>
+          <article class="panel span-12">
+            <header class="ph"><h2>Salud por equipo</h2><span class="muted" id="obsProbe"></span></header>
+            <div class="table-wrap"><table class="data obs-table">
+              <thead><tr><th>Equipo</th><th>Estado</th><th>Salud</th><th>Disponib. 24 h</th><th>Latencia</th><th>Tendencia</th><th>Último sondeo</th><th>Eventos 24 h</th><th>Críticos</th><th>Incid.</th><th>Depende de</th></tr></thead>
+              <tbody id="obsRows"></tbody>
+            </table></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== USUARIOS -->
+      <section class="view" id="v-usuarios">
+        <div class="grid">
+          <article class="panel span-12">
+            <header class="ph"><h2>Usuarios del NOC</h2><span class="muted">Solo el administrador ve esta sección</span></header>
+            <div class="table-wrap"><table class="data">
+              <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Doble factor</th><th>Último ingreso</th><th>Acciones</th></tr></thead>
+              <tbody id="usrRows"></tbody>
+            </table></div>
+          </article>
+          <article class="panel span-4">
+            <header class="ph"><h2>Nuevo usuario</h2></header>
+            <form id="usrForm" class="stack" autocomplete="off">
+              <label>Usuario<input name="username" maxlength="32" placeholder="ej. analista2" required spellcheck="false"></label>
+              <label>Nombre completo<input name="full_name" maxlength="80" required></label>
+              <label>Rol<select name="role"><option value="operador">Operador</option><option value="monitoreo">Monitoreo (solo lectura)</option><option value="administrador">Administrador</option></select></label>
+              <label>Contraseña inicial<input name="password" type="password" maxlength="128" autocomplete="new-password" placeholder="Mínimo 8, letras y números" required></label>
+              <button class="btn primary" type="submit">Crear usuario</button>
+            </form>
+          </article>
+          <article class="panel span-8">
+            <header class="ph"><h2>Qué puede hacer cada rol</h2></header>
+            <div class="table-wrap"><table class="data perms">
+              <thead><tr><th>Función</th><th>Administrador</th><th>Operador</th><th>Monitoreo</th></tr></thead>
+              <tbody>
+                <tr><td>Ver panel, eventos, incidentes, políticas, asistente, Telegram y auditoría</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+                <tr><td>Laboratorio de políticas (evaluar sin guardar)</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+                <tr><td>Importar registros, crear y gestionar incidentes, proponer acciones</td><td>Sí</td><td>Sí</td><td>No</td></tr>
+                <tr><td>Aprobar o rechazar acciones propuestas por otra persona</td><td>Sí</td><td>Sí</td><td>No</td></tr>
+                <tr><td>Revisar decisiones del motor (confirmar / falso positivo)</td><td>Sí</td><td>Sí</td><td>No</td></tr>
+                <tr><td>Consola simulada y consola real en solo lectura; mensaje de prueba de Telegram</td><td>Sí</td><td>Sí</td><td>No</td></tr>
+                <tr><td>Registrar, editar o eliminar equipos del inventario</td><td>Sí</td><td>No</td><td>No</td></tr>
+                <tr><td>Consola real en modo administrador y aplicar configuración Syslog al equipo</td><td>Sí</td><td>No</td><td>No</td></tr>
+                <tr><td>Crear usuarios, cambiar roles, desactivar, desbloquear, restablecer contraseñas y reiniciar el doble factor</td><td>Sí</td><td>No</td><td>No</td></tr>
+                <tr><td>Ver observabilidad y mapa de dependencias</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+                <tr><td>Sondear un equipo a demanda</td><td>Sí</td><td>Sí</td><td>No</td></tr>
+                <tr><td>Definir de qué equipos depende cada uno</td><td>Sí</td><td>No</td><td>No</td></tr>
+                <tr><td>Activar su propio doble factor (TOTP) y cambiar su contraseña</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+              </tbody>
+            </table></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================================================== PROYECTO -->
+      <section class="view" id="v-proyecto">
+        <div class="grid">
+          <article class="panel span-7 about">
+            <h2 class="about-title">Un NOC donde la IA asesora y las personas deciden</h2>
+            <p class="lead">El sistema recibe mensajes Syslog de equipos Cisco, Fortinet y Huawei, los clasifica y aplica seis políticas de seguridad antes de que un asistente de IA los analice. Las acciones de impacto siempre requieren la aprobación de un analista, y cada decisión queda en la auditoría.</p>
+            <dl class="facts">
+              <div><dt>Autor</dt><dd>Roger Fabian Murcia Fino</dd></div>
+              <div><dt>Curso</dt><dd>Administración y Gestión de Redes · 2026-2</dd></div>
+              <div><dt>Institución</dt><dd>Fundación Universitaria Compensar</dd></div>
+              <div><dt>Repositorio</dt><dd><a href="https://github.com/RogerMurcia/noc-syslog-inteligente" target="_blank" rel="noopener">github.com/RogerMurcia/noc-syslog-inteligente</a></dd></div>
+              <div><dt>Tecnologías</dt><dd>Python · Flask · SQLite · Telegram Bot API · HTML/CSS/JS sin dependencias</dd></div>
+            </dl>
+          </article>
+          <article class="panel span-5">
+            <header class="ph"><h2>Cómo se ejecuta</h2></header>
+            <ol class="steps run">
+              <li><code>iniciar_noc.bat</code><span>Instala y abre todo con doble clic (Windows)</span></li>
+              <li><code>admin + TOTP</code><span>Doble factor RFC 6238: QR y códigos en el README</span></li>
+              <li><code>python app.py</code><span>Aplicación web en 127.0.0.1:5000</span></li>
+              <li><code>python receptor.py</code><span>Recibe Syslog por UDP 5514</span></li>
+              <li><code>python simulador.py</code><span>Envía 20 eventos de prueba</span></li>
+              <li><code>python bot_telegram.py</code><span>Bot de consulta (opcional)</span></li>
+              <li><code>python -m pytest -q</code><span>Pruebas automáticas</span></li>
+            </ol>
+          </article>
+          <article class="panel span-12">
+            <header class="ph"><h2>Recorrido de un mensaje</h2></header>
+            <div class="journey" id="journey"></div>
+          </article>
+        </div>
+      </section>
+    </main>
   </div>
-</section>
+</div>
 
-<!-- ============================ POLÍTICA IA ============================ -->
-<section class="view" id="view-politica">
-  <div class="head"><h1>Política de defensa frente a acciones de agentes de IA</h1></div>
-  <div class="kpis" id="pol-kpis"></div>
-  <div class="card policy">
-    <h2>Flujo seguro obligatorio</h2>
-    <p><b>evento detectado → validación → propuesta de acción → revisión humana → aprobación → ejecución autorizada → verificación → auditoría</b></p>
-    <h3>Controles implementados en esta versión (v0.2.0)</h3>
-    <ol>
-      <li><b>Fuentes autorizadas:</b> solo los equipos del inventario marcados como autorizados generan incidentes; el resto se guarda marcado <code>fuente_no_autorizada</code> y se audita.</li>
-      <li><b>Identidad por IP de origen:</b> el equipo se identifica por la IP del paquete, no por el nombre escrito dentro del log (evita suplantación).</li>
-      <li><b>Severidades que generan incidentes:</b> 0 Emergency, 1 Alert, 2 Critical y 3 Error. De 4 a 7 solo se registran.</li>
-      <li><b>Logs como datos no confiables:</b> el texto de un log nunca se ejecuta ni se usa como instrucción; los intentos de <i>prompt injection</i> se marcan <code>posible_prompt_injection</code> y el título del incidente lo escribe el sistema, no el log.</li>
-      <li><b>Deduplicación y control de tormentas:</b> mensajes repetidos en 60 s se agrupan (contador); el receptor UDP descarta el exceso de mensajes por minuto de una misma IP.</li>
-      <li><b>Lista permitida de comandos:</b> la consola solo acepta comandos de lectura del fabricante; bloquea encadenamientos (<code>; | &amp; $ &gt;</code>) y comandos peligrosos.</li>
-      <li><b>El agente de IA no ejecuta:</b> solo puede <i>proponer</i> acciones. No puede aprobarlas; quien propone no puede aprobar su propia acción; solo se ejecuta lo aprobado (en el MVP la ejecución es simulada).</li>
-      <li><b>Hora sincronizada (NTP) y registro de accesos/cambios:</b> incluidos en las plantillas de Cisco, Fortinet y Huawei.</li>
-      <li><b>Auditoría:</b> toda acción (inventario, importación, consola, incidentes, aprobaciones) queda con fecha, responsable y resultado; la aplicación no borra ni modifica registros de auditoría.</li>
-    </ol>
-    <h3>Pendiente para la versión 1.0.0 (Corte 3)</h3>
-    <p class="muted">Login con roles, SSH real a través del backend, alertas por Telegram, transporte TLS (RFC 5425), detección de comandos fuera de horario y cuentas de servicio, respaldo e integridad de logs.</p>
-  </div>
-</section>
+<div class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-scrim" data-close></div>
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <header><div><small id="drawerKicker"></small><h2 id="drawerTitle"></h2></div><button class="icon-btn" data-close aria-label="Cerrar">✕</button></header>
+    <div class="drawer-body" id="drawerBody"></div>
+  </aside>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
-<!-- ============================ AUDITORÍA ============================ -->
-<section class="view" id="view-auditoria">
-  <div class="head"><h1>Registro de auditoría</h1><button class="btn" id="aud-refresh">Actualizar</button></div>
-  <div class="card table-wrap"><table>
-    <thead><tr><th>#</th><th>Fecha</th><th>Responsable</th><th>Acción</th><th>Objeto</th><th>Detalle</th><th>Resultado</th></tr></thead>
-    <tbody id="aud-table"></tbody></table></div>
-</section>
-</main>
-
-<!-- ============================ DIÁLOGOS ============================ -->
-<dialog id="dlg-device"><form id="frm-device" method="dialog">
-  <h2 id="dev-title">Equipo</h2>
-  <div class="form-grid">
-    <label>Nombre<input name="name" required maxlength="64"></label>
-    <label>IP<input name="ip" required></label>
-    <label>Marca<select name="vendor"><option>Cisco</option><option>Fortinet</option><option>Huawei</option><option>Otro</option></select></label>
-    <label>Modelo<input name="model" maxlength="100"></label>
-    <label>Versión<input name="version" maxlength="100"></label>
-    <label>Ubicación<input name="location" maxlength="100"></label>
-    <label>Estado<select name="status"><option>activo</option><option>alerta</option><option>caido</option><option>mantenimiento</option><option>desconocido</option></select></label>
-    <div><label class="check"><input type="checkbox" name="authorized" checked> Fuente autorizada</label>
-         <label class="check"><input type="checkbox" name="is_simulated" checked> Dato simulado</label></div>
-  </div>
-  <div class="dlg-actions"><button class="btn" value="cancel" formnovalidate>Cancelar</button><button class="btn primary" value="ok">Guardar</button></div>
-</form></dialog>
-
-<dialog id="dlg-new-inc"><form id="frm-new-inc" method="dialog">
-  <h2>Nuevo incidente</h2>
-  <div class="form-grid">
-    <label class="full">Título<input name="title" required minlength="5" maxlength="150"></label>
-    <label>Severidad<select name="severity" class="sel-sev"></select></label>
-    <label>Equipo<select name="device_id" class="sel-device"><option value="">—</option></select></label>
-    <label class="full">Descripción<textarea name="description" rows="3" maxlength="2000"></textarea></label>
-  </div>
-  <div class="dlg-actions"><button class="btn" value="cancel" formnovalidate>Cancelar</button><button class="btn primary" value="ok">Crear</button></div>
-</form></dialog>
-
-<dialog id="dlg-inc">
-  <div class="head" style="margin:0"><h2 id="inc-title"></h2><button class="btn" id="inc-close">Cerrar ventana</button></div>
-  <p id="inc-meta"></p>
-  <pre class="pre" id="inc-event" hidden></pre>
-  <div class="grid2" style="margin-top:12px">
-    <div>
-      <h3>Asignar</h3>
-      <form id="frm-assign" class="row"><input name="assigned_to" placeholder="responsable" maxlength="32"><button class="btn">Asignar</button></form>
-      <h3>Cambiar estado</h3>
-      <form id="frm-status" class="row">
-        <select name="status"><option value="en_progreso">en_progreso</option><option value="cerrado">cerrado</option></select>
-        <input name="resolution" placeholder="resolución (obligatoria al cerrar)" style="flex:1">
-        <button class="btn">Aplicar</button></form>
-      <h3>Nota de seguimiento</h3>
-      <form id="frm-note" class="row"><input name="note" placeholder="nota" style="flex:1" maxlength="2000"><button class="btn">Agregar</button></form>
-    </div>
-    <div>
-      <h3>Proponer acción (requiere aprobación humana)</h3>
-      <form id="frm-action">
-        <div class="row"><input name="command" placeholder="comando propuesto" style="flex:1" maxlength="200">
-          <select name="actor"><option value="operador">Operador</option><option value="asistente_ia">Asistente IA</option></select></div>
-        <div class="row"><input name="justification" placeholder="justificación" style="flex:1" maxlength="500"><button class="btn">Proponer</button></div>
-      </form>
-      <div id="inc-actions"></div>
-    </div>
-  </div>
-  <h3>Seguimiento</h3><ul class="timeline" id="inc-notes"></ul>
-</dialog>
-
-<div id="toast" class="toast" role="status"></div>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

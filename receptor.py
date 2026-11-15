@@ -57,8 +57,11 @@ def main():
             extra = f"  [{', '.join(r['flags'])}]" if r["flags"] else ""
             if r["incident"]:
                 extra += f"  -> incidente #{r['incident']['id']}"
+            if r.get("notification"):
+                extra += f"  [Telegram: {r['notification']['status']}]"
             tag = "DUP" if r["duplicate"] else f"#{r['id']}"
-            print(f"[UDP] {ip:<15} {tag:<6} sev {r['severity']} {r['severity_name']:<13} "
+            decision = r["policy"]["decision"] if r.get("policy") else "-"
+            print(f"[UDP] {ip:<15} {tag:<6} {decision:<6} sev {r['severity']} {r['severity_name']:<13} "
                   f"{r['vendor']:<9} {r['message'][:60]}{extra}")
     except KeyboardInterrupt:
         print(f"\n[NOC] Receptor detenido. Mensajes procesados: {received}")

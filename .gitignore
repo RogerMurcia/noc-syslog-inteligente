@@ -1,0 +1,20 @@
+# Secretos
+.env
+*.pem
+*.key
+# Base de datos local (se regenera sola)
+data/*.db
+data/*.db-journal
+# Entorno virtual y archivos generados
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Editores y sistema operativo
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+# Clave que firma las cookies de sesión (se genera sola)
+data/.secret_key
