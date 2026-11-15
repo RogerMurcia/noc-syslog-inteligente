@@ -13,6 +13,12 @@ Camino de cada mensaje Syslog (función ingest):
       5. ¿Repetido en 60 s?           -> deduplicación (suma al contador)
       6. Se guarda en la tabla events
       7. Severidad 0-3 de fuente autorizada -> incidente (o se suma al abierto)
+
+v1.0.0 - MOTOR DE POLÍTICAS ANTES DE LA IA (security/policy_engine.py):
+      P02. Los secretos se REDACTAN antes de guardar el evento (se guarda el hash del original)
+      8. evaluate() -> ALLOW / REVIEW / BLOCK + políticas + evidencia -> tabla policy_decisions (P05)
+      9. Asistente de IA de SOLO LECTURA (asistente_ia.py): no se invoca si la decisión es BLOCK
+     10. Alerta a Telegram (telegram_noc.py) para BLOCK, REVIEW crítico e incidentes nuevos
 """
 import hashlib
 import os
@@ -24,6 +30,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import syslog_parser
+from security import policy_engine
 
 # ---------------------------------------------------------------------------
 # Configuración (.env; nunca se escriben secretos en el código)
@@ -125,7 +132,19 @@ INJECTION_PATTERNS = [re.compile(p, re.I) for p in (
 
 
 def detect_prompt_injection(text: str) -> bool:
-    return any(p.search(text or "") for p in INJECTION_PATTERNS)
+    """Heurística básica (v0.2) + patrones del motor de políticas (P06)."""
+    return any(p.search(text or "") for p in INJECTION_PATTERNS) or bool(policy_engine.detect_injection(text))
+
+
+AUTH_WINDOW_SECONDS = 300      # ventana para correlacionar fallos de autenticación (fuerza bruta)
+
+
+def auth_failures(conn, source_ip: str) -> int:
+    """Fallos de autenticación del mismo origen en la ventana (incluye repeticiones deduplicadas)."""
+    rows = conn.execute("SELECT mnemonic, message, dup_count FROM events WHERE source_ip = ? AND received_at >= ? "
+                        "ORDER BY id DESC LIMIT 500", (source_ip, iso_ago(AUTH_WINDOW_SECONDS))).fetchall()
+    return sum(r["dup_count"] for r in rows
+               if policy_engine.AUTH_FAIL.search(r["mnemonic"] or "") or policy_engine.AUTH_FAIL.search(r["message"]))
 
 
 def fingerprint(source_ip, severity, mnemonic, message) -> str:
@@ -158,9 +177,10 @@ def _auto_incident(conn, ev: dict):
     Si ya hay uno abierto del mismo equipo y mismo código, se suma a ese (correlación).
     El título lo arma el sistema con datos estructurados; NUNCA copia el texto del log.
     """
-    if not ev["authorized"] or ev["severity"] > INCIDENT_MAX_SEVERITY:
+    forced = ev.get("force_reason")          # v1.0: BLOCK o fuerza bruta también abren incidente
+    if not ev["authorized"] or (ev["severity"] > INCIDENT_MAX_SEVERITY and not forced):
         return None
-    key = f"{ev['device_id']}|{ev['mnemonic'] or ev['fingerprint']}"
+    key = f"{ev['device_id']}|{ev.get('correlation') or ev['mnemonic'] or ev['fingerprint']}"
     row = conn.execute("SELECT id FROM incidents WHERE correlation_key = ? AND status != 'cerrado'",
                        (key,)).fetchone()
     if row:
@@ -170,12 +190,15 @@ def _auto_incident(conn, ev: dict):
         return {"id": row["id"], "correlated": True}
     if "posible_prompt_injection" in ev["flags"]:
         title = f"Posible prompt injection en log de {ev['device_name']}"
+    elif forced == "fuerza_bruta":
+        title = f"Posible fuerza bruta contra {ev['device_name']}"
     else:
         title = f"{ev['mnemonic'] or 'Evento ' + SEVERITY_NAMES[ev['severity']]} en {ev['device_name']}"
     inc_id = create_incident(
         conn, title=title, severity=ev["severity"], created_by="sistema",
-        description=f"Generado por la política de severidades (evento #{ev['id']}, "
-                    f"severidad {ev['severity']} {SEVERITY_NAMES[ev['severity']]}).",
+        description=f"Generado por el motor de políticas (evento #{ev['id']}, severidad {ev['severity']} "
+                    f"{SEVERITY_NAMES[ev['severity']]}, decisión {ev.get('decision', '-')}, "
+                    f"políticas {ev.get('policies', '-')}).",
         device_id=ev["device_id"], event_id=ev["id"], correlation_key=key,
         is_simulated=ev["is_simulated"])
     return {"id": inc_id, "correlated": False}
@@ -184,10 +207,16 @@ def _auto_incident(conn, ev: dict):
 # ---------------------------------------------------------------------------
 # Ingesta
 # ---------------------------------------------------------------------------
-def ingest(conn, raw: str, source_ip: str, origin: str) -> dict:
+def ingest(conn, raw: str, source_ip: str, origin: str, notify: bool = True) -> dict:
     """Procesa y guarda UN mensaje. origin: 'udp' | 'importacion'."""
     p = syslog_parser.parse(raw)
     flags = list(p["parse_flags"])
+    original_raw = raw
+    # P02: los secretos se ocultan ANTES de guardar o mostrar nada
+    p["message"], secrets_msg = policy_engine.redact(p["message"])
+    raw, secrets_raw = policy_engine.redact(raw)
+    if secrets_msg or secrets_raw:
+        flags.append("secretos_redactados")
 
     # La IP de ORIGEN del paquete identifica al equipo; el nombre que trae
     # el texto no se usa porque cualquiera puede escribir cualquier nombre.
@@ -208,12 +237,21 @@ def ingest(conn, raw: str, source_ip: str, origin: str) -> dict:
     fp = fingerprint(source_ip, p["severity"], p["mnemonic"], p["message"])
     prev = conn.execute("SELECT id, dup_count FROM events WHERE fingerprint = ? AND received_at >= ? "
                         "ORDER BY id DESC LIMIT 1", (fp, iso_ago(DEDUP_WINDOW_SECONDS))).fetchone()
+    ctx = {"p": p, "original_raw": original_raw, "source_ip": source_ip, "dev": dev, "authorized": authorized,
+           "vendor": vendor, "is_simulated": is_simulated, "flags": flags, "notify": notify}
     if prev:
         conn.execute("UPDATE events SET dup_count = dup_count + 1 WHERE id = ?", (prev["id"],))
         conn.commit()
-        return {"id": prev["id"], "duplicate": True, "severity": p["severity"],
-                "severity_name": p["severity_name"], "vendor": vendor, "flags": flags,
-                "message": p["message"], "incident": None}
+        result = {"id": prev["id"], "duplicate": True, "severity": p["severity"],
+                  "severity_name": p["severity_name"], "vendor": vendor, "flags": flags,
+                  "message": p["message"], "incident": None}
+        # Los fallos de acceso idénticos se deduplican, pero SIGUEN contando para la fuerza bruta:
+        # al cruzar el umbral se evalúa de nuevo para abrir el incidente y avisar a Telegram.
+        is_auth = (policy_engine.AUTH_FAIL.search(p["mnemonic"] or "")
+                   or policy_engine.AUTH_FAIL.search(p["message"]))
+        if is_auth and auth_failures(conn, source_ip) == policy_engine.BRUTE_FORCE_THRESHOLD:
+            result.update(_apply_policies(conn, prev["id"], fp, ctx))
+        return result
 
     cur = conn.execute(
         "INSERT INTO events (received_at, event_time, source_ip, device_id, vendor, facility, severity, "
@@ -230,19 +268,71 @@ def ingest(conn, raw: str, source_ip: str, origin: str) -> dict:
         audit(conn, "sistema", "syslog.sospechoso", "events", event_id,
               f"origen={source_ip} marcas={','.join(suspicious)}", "alerta")
 
+    result = {"id": event_id, "duplicate": False, "severity": p["severity"],
+              "severity_name": p["severity_name"], "vendor": vendor, "flags": flags, "message": p["message"]}
+    result.update(_apply_policies(conn, event_id, fp, ctx))
+    return result
+
+
+def _apply_policies(conn, event_id: int, fp: str, ctx: dict) -> dict:
+    """Motor de políticas -> incidente -> asistente IA (solo lectura) -> Telegram."""
+    p, dev, source_ip = ctx["p"], ctx["dev"], ctx["source_ip"]
+    failures = auth_failures(conn, source_ip)
+    decision = policy_engine.evaluate(
+        {"message": p["message"], "raw": ctx["original_raw"], "severity": p["severity"],
+         "authorized": ctx["authorized"], "flags": ctx["flags"], "mnemonic": p["mnemonic"], "source_ip": source_ip},
+        context={"auth_failures": failures})
+    decision_id = record_decision(conn, event_id, decision)
+    reasons = " ".join(decision["reasons"])
+    force = ("bloqueo_ia" if decision["decision"] == "BLOCK"
+             else "fuerza_bruta" if "fuerza bruta" in reasons else None)
+
+    device_name = dev["name"] if dev else source_ip
     incident = _auto_incident(conn, {
         "id": event_id, "device_id": dev["id"] if dev else None,
-        "device_name": dev["name"] if dev else source_ip, "severity": p["severity"],
-        "mnemonic": p["mnemonic"], "fingerprint": fp, "flags": flags,
-        "authorized": authorized, "is_simulated": is_simulated})
-    return {"id": event_id, "duplicate": False, "severity": p["severity"],
-            "severity_name": p["severity_name"], "vendor": vendor, "flags": flags,
-            "message": p["message"], "incident": incident}
+        "device_name": device_name, "severity": p["severity"],
+        "mnemonic": p["mnemonic"], "fingerprint": fp, "flags": ctx["flags"],
+        "authorized": ctx["authorized"], "is_simulated": ctx["is_simulated"],
+        "force_reason": force, "correlation": "FUERZA_BRUTA" if force == "fuerza_bruta" else None,
+        "decision": decision["decision"], "policies": ",".join(decision["policies"])})
+
+    import asistente_ia      # import tardío: evita importaciones circulares
+    import telegram_noc
+    ev = {"id": event_id, "severity": p["severity"], "vendor": ctx["vendor"], "mnemonic": p["mnemonic"],
+          "message": p["message"], "device_name": device_name, "source_ip": source_ip}
+    try:
+        analysis = asistente_ia.analyze(ev, decision)
+    except Exception as e:      # falla segura: si la IA falla, las reglas ya decidieron
+        analysis = {"invocada": False, "titulo": "Asistente no disponible", "riesgo": "-",
+                    "soluciones": [], "verificacion": [], "error": type(e).__name__}
+        audit(conn, "sistema", "ia.error", "events", event_id, type(e).__name__, "error")
+    notification = (telegram_noc.notify(conn, ev, decision, analysis, incident, now_iso)
+                    if ctx["notify"] else None)
+    return {"incident": incident, "notification": notification,
+            "policy": {"id": decision_id, "decision": decision["decision"], "policies": decision["policies"],
+                       "reasons": decision["reasons"], "ai_invoked": decision["ai_invoked"]}}
+
+
+def record_decision(conn, event_id, decision: dict) -> int:
+    """P05: guarda la decisión del motor y la deja en la auditoría."""
+    cur = conn.execute(
+        "INSERT INTO policy_decisions (event_id, decision, policies, reasons, evidence, secrets, injection, "
+        "ai_invoked, event_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (event_id, decision["decision"], ",".join(decision["policies"]), " | ".join(decision["reasons"]),
+         " | ".join(decision["evidence"]), ",".join(decision["secrets"]) or None,
+         ",".join(decision["injection"]) or None, int(decision["ai_invoked"]), decision["event_hash"], now_iso()))
+    conn.commit()
+    result = {"ALLOW": "ok", "REVIEW": "alerta", "BLOCK": "bloqueado"}[decision["decision"]]
+    audit(conn, "motor_politicas", "policy.decision", "events", event_id,
+          f"{decision['decision']} políticas={','.join(decision['policies'])} hash={decision['event_hash'][:16]}",
+          result)
+    return cur.lastrowid
 
 
 def import_lines(conn, lines, source_ip: str, actor: str, filename: str = "") -> dict:
     """Importa un archivo de log: una línea = un mensaje. Ignora vacías y comentarios (#)."""
-    stats = {"leidas": 0, "nuevas": 0, "duplicadas": 0, "incidentes_nuevos": 0}
+    stats = {"leidas": 0, "nuevas": 0, "duplicadas": 0, "incidentes_nuevos": 0,
+             "allow": 0, "review": 0, "block": 0}
     for line in lines:
         line = line.strip()
         if not line or line.startswith("#"):
@@ -254,5 +344,7 @@ def import_lines(conn, lines, source_ip: str, actor: str, filename: str = "") ->
         stats["duplicadas" if r["duplicate"] else "nuevas"] += 1
         if r["incident"] and not r["incident"]["correlated"]:
             stats["incidentes_nuevos"] += 1
+        if r.get("policy"):
+            stats[r["policy"]["decision"].lower()] += 1
     audit(conn, actor, "syslog.import", "events", None, f"archivo={filename or '-'} origen={source_ip} {stats}")
     return stats
